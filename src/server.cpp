@@ -56,8 +56,23 @@ int main(int argc, char **argv)
   int client_fd = accept(server_fd, (struct sockaddr *)&client_addr, (socklen_t *)&client_addr_len);
   std::cout << "Client connected\n";
 
-  std::string message = "HTTP/1.1 200 OK\r\n\r\n";
-  send(client_fd,message.c_str(),message.size(),0);
+  char buffer[1024];
+  recv(client_fd, buffer, 1024, 0);
+  std::cout << "Received: " << buffer << std::endl;
+
+  std::strtok(buffer, " ");
+  std::string path = std::strtok(NULL, " ");
+  std::cout << "Path: " << path << std::endl;
+
+  if(path == "/"){
+    std::string message = "HTTP/1.1 200 OK\r\n\r\n";
+    send(client_fd,message.c_str(),message.size(),0);
+  }else {
+    std::string message = "HTTP/1.1 404 Not Found\r\n\r\n";
+    send(client_fd,message.c_str(),message.size(),0);
+  }
+
+  
   
   close(server_fd);
 
