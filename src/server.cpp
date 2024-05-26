@@ -7,6 +7,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <regex>
 
 #define debug(x) std::cerr << #x << " = " << x << std::endl;
 
@@ -64,10 +65,17 @@ int main(int argc, char **argv)
   std::string path = std::strtok(NULL, " ");
   std::cout << "Path: " << path << std::endl;
 
+  std::regex pattern("^/echo/.+$");
+
   if(path == "/"){
     std::string message = "HTTP/1.1 200 OK\r\n\r\n";
     send(client_fd,message.c_str(),message.size(),0);
-  }else {
+  }else if(std::regex_match(path,pattern)){
+    std::string content = path.substr(6);
+    std::string response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: " + std::to_string(content.size()) + "\r\n\r\n" + content;
+    send(client_fd,response.c_str(),response.size(),0);
+  }
+  else {
     std::string message = "HTTP/1.1 404 Not Found\r\n\r\n";
     send(client_fd,message.c_str(),message.size(),0);
   }
