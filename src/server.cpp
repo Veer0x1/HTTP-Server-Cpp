@@ -13,7 +13,7 @@
 
 int main(int argc, char **argv)
 {
-
+  // creating a socket file descriptor with IPv4, TCP, and default protocol
   int server_fd = socket(AF_INET, SOCK_STREAM, 0);
   if (server_fd < 0)
   {
@@ -21,8 +21,7 @@ int main(int argc, char **argv)
     return 1;
   }
 
-  // Since the tester restarts your program quite often, setting REUSE_PORT
-  // ensures that we don't run into 'Address already in use' errors
+  // set the SO_REUSEPORT option
   int reuse = 1;
   if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEPORT, &reuse, sizeof(reuse)) < 0)
   {
@@ -53,12 +52,11 @@ int main(int argc, char **argv)
 
   std::cout << "Waiting for a client to connect...\n";
 
-  
   int client_fd = accept(server_fd, (struct sockaddr *)&client_addr, (socklen_t *)&client_addr_len);
   std::cout << "Client connected\n";
 
-  char buffer[1024];
-  recv(client_fd, buffer, 1024, 0);
+  char buffer[4096];
+  int bytesReceived = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
   std::cout << "Received: " << buffer << std::endl;
 
   std::strtok(buffer, " ");
@@ -67,22 +65,46 @@ int main(int argc, char **argv)
 
   std::regex pattern("^/echo/.+$");
 
-  if(path == "/"){
+  if (path == "/")
+  {
     std::string message = "HTTP/1.1 200 OK\r\n\r\n";
-    send(client_fd,message.c_str(),message.size(),0);
-  }else if(std::regex_match(path,pattern)){
+    send(client_fd, message.c_str(), message.size(), 0);
+  }
+  else if (std::regex_match(path, pattern))
+  {
     std::string content = path.substr(6);
     std::string response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: " + std::to_string(content.size()) + "\r\n\r\n" + content;
-    send(client_fd,response.c_str(),response.size(),0);
+    send(client_fd, response.c_str(), response.size(), 0);
   }
-  else {
-    std::string message = "HTTP/1.1 404 Not Found\r\n\r\n";
-    send(client_fd,message.c_str(),message.size(),0);
-  }
+  else if (path == "/user-agent")
+  {
+    std::string request;
+    for(int i = 0; i < bytesReceived; i++)
+    {
+      request += buffer[i];
+    }
+    std::string userAgentHeader = "User-Agent: ";
+    size_t ua_start = request.find(userAgentHeader);
 
-  
-  
-  close(server_fd);
+    //If the User-Agent header is found
+    if(ua_start != std::string::npos){
+      size_t ua_end = request.find("\r\n", ua_start);
+      std::string userAgent = request.substr(ua_start + userAgentHeader.size(), ua_end - ua_start - userAgentHeader.size());
+      std::string response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: " + std::to_string(userAgent.size()) + "\r\n\r\n" + userAgent;
+      send(client_fd, response.c_str(), response.size(), 0);
+    }
+    else{
+      std::string message = "HTTP/1.1 404 Not Found\r\n\r\n";
+      send(client_fd, message.c_str(), message.size(), 0);
+    }
+
+    std::cout << request << std::endl;
+  }
+  else
+  {
+    std::string message = "HTTP/1.1 404 Not Found\r\n\r\n";
+    send(client_fd, message.c_str(), message.size(), 0);
+  }
 
   return 0;
 }
