@@ -56,21 +56,45 @@ void handleNotFound(int client_fd)
     send(client_fd, message.c_str(), message.size(), 0);
 }
 
-void handleFilesRoute(int client_fd, char **argv, std::string &path)
+void handleFilesRoute(int client_fd, char **argv, std::string &path, char *method, char *buffer)
 {
-    std::cout << "I'm in files Route" << std::endl;
     std::string directory = argv[2];
     std::string filename = path.substr(7);
-    std::string filePath = directory + "/" + filename;
+    std::string filePath = directory + filename;
 
-    std::cout << filePath << std::endl;
-
-    if (std::filesystem::exists(filePath))
+    if (strcmp(method, "GET") == 0)
     {
-        std::ifstream file(filePath);
-        std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-        std::string response = "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: " + std::to_string(content.size()) + "\r\n\r\n" + content;
-        send(client_fd, response.c_str(), response.size(), 0);
+        if (std::filesystem::exists(filePath))
+        {
+            std::ifstream file(filePath);
+            std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+            std::string response = "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: " + std::to_string(content.size()) + "\r\n\r\n" + content;
+            send(client_fd, response.c_str(), response.size(), 0);
+        }
+        else
+        {
+            handleNotFound(client_fd);
+        }
+    }
+    else if (strcmp(method, "POST") == 0)
+    {
+        char *body = strstr(buffer, "\r\n\r\n");
+        if (body != NULL)
+        {
+            body += 4; // skips the "\r\n\r\n"
+
+            std::ofstream file(filePath);
+            file << body;
+            file.close();
+
+            std::string response = "HTTP/1.1 201 Created\r\n\r\n";
+            send(client_fd, response.c_str(), response.size(), 0);
+        }
+        else
+        {
+            std::string response = "HTTP/1.1 400 Bad Request\r\n\r\n";
+            send(client_fd, response.c_str(), response.size(), 0);
+        }
     }
     else
     {
@@ -84,7 +108,12 @@ void handleClient(int client_fd, char **argv, int argc)
     int bytesReceived = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
     std::cout << "Received: " << buffer << std::endl;
 
-    strtok(buffer, " ");
+    char bufferCopy[4096];
+    strcpy(bufferCopy, buffer);
+
+    char *method = strtok(bufferCopy, " ");
+    std::cout << "Method: " << method << std::endl;
+
     std::string path = strtok(NULL, " ");
     std::cout << "Path: " << path << std::endl;
 
@@ -105,7 +134,7 @@ void handleClient(int client_fd, char **argv, int argc)
     }
     else if (std::regex_match(path, filesPattern) and argc == 3 && strcmp(argv[1], "--directory") == 0)
     {
-        handleFilesRoute(client_fd, argv, path);
+        handleFilesRoute(client_fd, argv, path, method, buffer);
     }
     else
     {
