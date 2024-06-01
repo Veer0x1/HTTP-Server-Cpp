@@ -3,11 +3,13 @@
 #include <string>
 #include <cstring>
 #include <unistd.h>
-#include <sys/types.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netdb.h>
-#include <regex>
+#include <thread>
+#include "request_handler.h"
+
+// using namespace std;
 
 #define debug(x) std::cerr << #x << " = " << x << std::endl;
 
@@ -52,59 +54,14 @@ int main(int argc, char **argv)
 
   std::cout << "Waiting for a client to connect...\n";
 
-  int client_fd = accept(server_fd, (struct sockaddr *)&client_addr, (socklen_t *)&client_addr_len);
-  std::cout << "Client connected\n";
-
-  char buffer[4096];
-  int bytesReceived = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
-  std::cout << "Received: " << buffer << std::endl;
-
-  std::strtok(buffer, " ");
-  std::string path = std::strtok(NULL, " ");
-  std::cout << "Path: " << path << std::endl;
-
-  std::regex pattern("^/echo/.+$");
-
-  if (path == "/")
+  while (true)
   {
-    std::string message = "HTTP/1.1 200 OK\r\n\r\n";
-    send(client_fd, message.c_str(), message.size(), 0);
+    int client_fd = accept(server_fd, (struct sockaddr *)&client_addr, (socklen_t *)&client_addr_len);
+    std::cout << "Client connected\n";
+    std::thread clientThread(handleClient, client_fd);
+    clientThread.detach();
   }
-  else if (std::regex_match(path, pattern))
-  {
-    std::string content = path.substr(6);
-    std::string response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: " + std::to_string(content.size()) + "\r\n\r\n" + content;
-    send(client_fd, response.c_str(), response.size(), 0);
-  }
-  else if (path == "/user-agent")
-  {
-    std::string request;
-    for(int i = 0; i < bytesReceived; i++)
-    {
-      request += buffer[i];
-    }
-    std::string userAgentHeader = "User-Agent: ";
-    size_t ua_start = request.find(userAgentHeader);
-
-    //If the User-Agent header is found
-    if(ua_start != std::string::npos){
-      size_t ua_end = request.find("\r\n", ua_start);
-      std::string userAgent = request.substr(ua_start + userAgentHeader.size(), ua_end - ua_start - userAgentHeader.size());
-      std::string response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: " + std::to_string(userAgent.size()) + "\r\n\r\n" + userAgent;
-      send(client_fd, response.c_str(), response.size(), 0);
-    }
-    else{
-      std::string message = "HTTP/1.1 404 Not Found\r\n\r\n";
-      send(client_fd, message.c_str(), message.size(), 0);
-    }
-
-    std::cout << request << std::endl;
-  }
-  else
-  {
-    std::string message = "HTTP/1.1 404 Not Found\r\n\r\n";
-    send(client_fd, message.c_str(), message.size(), 0);
-  }
+  close(server_fd);
 
   return 0;
 }
