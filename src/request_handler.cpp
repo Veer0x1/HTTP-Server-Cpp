@@ -6,6 +6,8 @@
 #include <unistd.h>
 #include <cstdlib>
 #include <sstream>
+#include <filesystem>
+#include <fstream>
 
 void handleRootRoute(int client_fd)
 {
@@ -29,8 +31,8 @@ void handleUserAgentRoute(int client_fd, char *buffer, int bytesReceived)
     {
         request += buffer[i];
     }
-    std::cout<<"Request received idher is: "<<std::endl;
-    std::cout<<request<<std::endl;
+    std::cout << "Request received idher is: " << std::endl;
+    std::cout << request << std::endl;
     std::string userAgentHeader = "User-Agent: ";
     size_t ua_start = request.find(userAgentHeader);
 
@@ -54,7 +56,29 @@ void handleNotFound(int client_fd)
     send(client_fd, message.c_str(), message.size(), 0);
 }
 
-void handleClient(int client_fd)
+void handleFilesRoute(int client_fd, char **argv, std::string &path)
+{
+    std::cout<<"I'm in files Route"<<std::endl;
+    std::string directory = argv[2];
+    std::string filename = path.substr(7);
+    std::string filePath = directory + "/" + filename;
+
+    std::cout<<filePath<<std::endl;
+
+    if (std::filesystem::exists(filePath))
+    {
+        std::ifstream file(filePath);
+        std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+        std::string response = "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: " + std::to_string(content.size()) + "\r\n\r\n" + content;
+        send(client_fd,response.c_str(),response.size(),0);
+    }
+    else
+    {
+        handleNotFound(client_fd);
+    }
+}
+
+void handleClient(int client_fd, char **argv)
 {
     char buffer[4096];
     int bytesReceived = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
@@ -65,6 +89,7 @@ void handleClient(int client_fd)
     std::cout << "Path: " << path << std::endl;
 
     std::regex pattern("^/echo/.+$");
+    std::regex filesPattern("^/files/[^/]+$");
 
     if (path == "/")
     {
@@ -77,6 +102,10 @@ void handleClient(int client_fd)
     else if (path == "/user-agent")
     {
         handleUserAgentRoute(client_fd, buffer, bytesReceived);
+    }
+    else if (std::regex_match(path, filesPattern))
+    {
+        handleFilesRoute(client_fd, argv, path);
     }
     else
     {
