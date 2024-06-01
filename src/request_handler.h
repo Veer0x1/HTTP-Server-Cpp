@@ -9,6 +9,6 @@ void handleUserAgentRoute(int client_fd, char *buffer, int bytesReceived);
 void handleNotFound(int clinet_fd);
 void handleFilesRoute(int client_fd, char **argv, std::string &path);
 
-void handleClient(int client_fd,char** argv);
+void handleClient(int client_fd,char** argv,int argc);
 
 #endif

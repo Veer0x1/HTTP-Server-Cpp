@@ -58,19 +58,19 @@ void handleNotFound(int client_fd)
 
 void handleFilesRoute(int client_fd, char **argv, std::string &path)
 {
-    std::cout<<"I'm in files Route"<<std::endl;
+    std::cout << "I'm in files Route" << std::endl;
     std::string directory = argv[2];
     std::string filename = path.substr(7);
     std::string filePath = directory + "/" + filename;
 
-    std::cout<<filePath<<std::endl;
+    std::cout << filePath << std::endl;
 
     if (std::filesystem::exists(filePath))
     {
         std::ifstream file(filePath);
         std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
         std::string response = "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: " + std::to_string(content.size()) + "\r\n\r\n" + content;
-        send(client_fd,response.c_str(),response.size(),0);
+        send(client_fd, response.c_str(), response.size(), 0);
     }
     else
     {
@@ -78,7 +78,7 @@ void handleFilesRoute(int client_fd, char **argv, std::string &path)
     }
 }
 
-void handleClient(int client_fd, char **argv)
+void handleClient(int client_fd, char **argv, int argc)
 {
     char buffer[4096];
     int bytesReceived = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
@@ -103,7 +103,7 @@ void handleClient(int client_fd, char **argv)
     {
         handleUserAgentRoute(client_fd, buffer, bytesReceived);
     }
-    else if (std::regex_match(path, filesPattern))
+    else if (std::regex_match(path, filesPattern) and argc == 3 && strcmp(argv[1], "--directory") == 0)
     {
         handleFilesRoute(client_fd, argv, path);
     }
