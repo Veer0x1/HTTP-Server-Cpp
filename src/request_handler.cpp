@@ -43,9 +43,46 @@ void handleEchoRoute(int client_fd, std::string &path, char *buffer, int bytesRe
     if (acceptsGzip)
     {
         std::string content = path.substr(6);
-        std::string response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Encoding: gzip\r\nContent-Length: " + std::to_string(content.size()) + "\r\n\r\n" + content;
-        send(client_fd, response.c_str(), response.size(), 0);
 
+        z_stream zs;
+        memset(&zs, 0, sizeof(zs));
+
+        if (deflateInit2(&zs, Z_BEST_COMPRESSION, Z_DEFLATED, 15 | 16, 8, Z_DEFAULT_STRATEGY) != Z_OK)
+        {
+            throw(std::runtime_error("deflateInit failed while compressing."));
+        }
+        zs.next_in = (Bytef *)content.data();
+        zs.avail_in = content.size();
+
+        int ret;
+        char outbuffer[32768];
+        std::string compressedContent;
+
+        // Retrieve the compressed bytes blockwise
+        do
+        {
+            zs.next_out = reinterpret_cast<Bytef *>(outbuffer);
+            zs.avail_out = sizeof(outbuffer);
+
+            ret = deflate(&zs, Z_FINISH);
+
+            if (compressedContent.size() < zs.total_out)
+            {
+                // Append the block to the output string
+                compressedContent.append(outbuffer, zs.total_out - compressedContent.size());
+            }
+        } while (ret == Z_OK);
+
+        deflateEnd(&zs);
+        if (ret != Z_STREAM_END)
+        { // an error occurred that was not EOF
+            std::ostringstream oss;
+            oss << "Exception during zlib compression: (" << ret << ") " << zs.msg;
+            throw(std::runtime_error(oss.str()));
+        }
+
+        std::string response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Encoding: gzip\r\nContent-Length: " + std::to_string(compressedContent.size()) + "\r\n\r\n" + compressedContent;
+        send(client_fd, response.c_str(), response.size(), 0);
     }
     else
     {
