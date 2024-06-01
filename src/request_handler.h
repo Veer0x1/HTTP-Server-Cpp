@@ -4,7 +4,7 @@
 #include <string>
 
 void handleRootRoute(int client_fd);
-void handleEchoRoute(int client_fd, std::string &path);
+void handleEchoRoute(int client_fd, std::string &path,char* buffer,int bytesReceived);
 void handleUserAgentRoute(int client_fd, char *buffer, int bytesReceived);
 void handleNotFound(int clinet_fd);
 void handleFilesRoute(int client_fd, char **argv, std::string &path,char* method,char* buffer);

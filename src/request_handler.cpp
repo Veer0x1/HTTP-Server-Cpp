@@ -8,6 +8,7 @@
 #include <sstream>
 #include <filesystem>
 #include <fstream>
+#include <zlib.h>
 
 void handleRootRoute(int client_fd)
 {
@@ -17,11 +18,41 @@ void handleRootRoute(int client_fd)
     send(client_fd, response.c_str(), response.size(), 0);
 }
 
-void handleEchoRoute(int client_fd, std::string &path)
+void handleEchoRoute(int client_fd, std::string &path, char *buffer, int bytesReceived)
 {
-    std::string content = path.substr(6);
-    std::string response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: " + std::to_string(content.size()) + "\r\n\r\n" + content;
-    send(client_fd, response.c_str(), response.size(), 0);
+    std::string request;
+    for (int i = 0; i < bytesReceived; i++)
+    {
+        request += buffer[i];
+    }
+
+    size_t encodingHeaderPos = request.find("Accept-Encoding:");
+    bool acceptsGzip = false;
+
+    if (encodingHeaderPos != std::string::npos)
+    {
+        size_t encodingHeaderEndPos = request.find("\r\n", encodingHeaderPos);
+
+        if (encodingHeaderEndPos != std::string::npos)
+        {
+            std::string encodingHeader = request.substr(encodingHeaderPos, encodingHeaderEndPos - encodingHeaderPos);
+            acceptsGzip = encodingHeader.find("gzip") != std::string::npos;
+        }
+    }
+
+    if (acceptsGzip)
+    {
+        std::string content = path.substr(6);
+        std::string response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Encoding: gzip\r\nContent-Length: " + std::to_string(content.size()) + "\r\n\r\n" + content;
+        send(client_fd, response.c_str(), response.size(), 0);
+
+    }
+    else
+    {
+        std::string content = path.substr(6);
+        std::string response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: " + std::to_string(content.size()) + "\r\n\r\n" + content;
+        send(client_fd, response.c_str(), response.size(), 0);
+    }
 }
 
 void handleUserAgentRoute(int client_fd, char *buffer, int bytesReceived)
@@ -31,8 +62,6 @@ void handleUserAgentRoute(int client_fd, char *buffer, int bytesReceived)
     {
         request += buffer[i];
     }
-    std::cout << "Request received idher is: " << std::endl;
-    std::cout << request << std::endl;
     std::string userAgentHeader = "User-Agent: ";
     size_t ua_start = request.find(userAgentHeader);
 
@@ -126,7 +155,7 @@ void handleClient(int client_fd, char **argv, int argc)
     }
     else if (std::regex_match(path, pattern))
     {
-        handleEchoRoute(client_fd, path);
+        handleEchoRoute(client_fd, path, buffer, bytesReceived);
     }
     else if (path == "/user-agent")
     {
